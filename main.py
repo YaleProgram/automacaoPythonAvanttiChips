@@ -1,80 +1,232 @@
+import tkinter as tk
+from tkinter import messagebox, filedialog
 import re
 import pandas as pd
-import google.generativeai as genai
 import os
-import json
+from datetime import datetime
 
-# Configuração do Google Generative AI
-GOOGLE_API_KEY = "AIzaSyAbCjFYEaFmfNqEZxmWGJjCfD76XuzU7oY"
-genai.configure(api_key=GOOGLE_API_KEY)
-
-# Configuração otimizada para extração precisa
-generation_config = {
-    "temperature": 0.1,
-    "top_p": 0.95,
-    "top_k": 20,
-    "max_output_tokens": 1024,
-}
-
-model = genai.GenerativeModel(
-    model_name="gemini-1.0-pro",
-    generation_config=generation_config,
-)
-
-def extrair_telefone_principal(texto):
-    """Extrai apenas o primeiro telefone de CONTATO, ignorando LINHAS de plano"""
-    # Primeiro procura por CONTATO
-    contato = re.search(r"CONTATO[:\s]*([\(\)\d\s\-+]+)", texto, re.IGNORECASE)
-    if contato:
-        return formatar_telefone(contato.group(1))
+class ExtratorApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Chips - Extrator de Dados")
+        self.root.geometry("700x500")
+        self.root.resizable(False, False)
+        
+        # Cores
+        self.cor_vivo_roxo = "#660099"  
+        self.cor_vivo_roxo_claro = "#9933CC"  
+        self.cor_branco = "#FFFFFF"
+        self.cor_texto = "#333333"
+        self.cor_fundo = "#F5F5F5"
+        
+        # Configurar estilo
+        self.root.configure(bg=self.cor_fundo)
+        self.fonte = ("Arial", 10)
+        self.fonte_titulo = ("Arial", 14, "bold")
+        
+        # Criar widgets
+        self.criar_widgets()
+        
+    def criar_widgets(self):
+        # Frame principal
+        frame = tk.Frame(self.root, bg=self.cor_branco, padx=20, pady=20)
+        frame.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
+        
+        # Cabeçalho com logo Chips
+        header_frame = tk.Frame(frame, bg=self.cor_vivo_roxo)
+        header_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        tk.Label(
+            header_frame, 
+            text="CHIPS", 
+            font=("Arial", 18, "bold"), 
+            bg=self.cor_vivo_roxo,
+            fg=self.cor_branco,
+            padx=10,
+            pady=5
+        ).pack(side=tk.LEFT)
+        
+        tk.Label(
+            header_frame, 
+            text="Extrator de Dados Vivo", 
+            font=("Arial", 12), 
+            bg=self.cor_vivo_roxo,
+            fg=self.cor_branco,
+            padx=10,
+            pady=5
+        ).pack(side=tk.LEFT)
+        
+        # Área de texto
+        tk.Label(
+            frame, 
+            text="Cole o texto para extração", 
+            font=self.fonte_titulo, 
+            bg=self.cor_branco,
+            fg=self.cor_vivo_roxo
+        ).pack(pady=(0, 10))
+        
+        self.texto_input = tk.Text(
+            frame, 
+            height=15, 
+            width=80, 
+            font=self.fonte,
+            wrap=tk.WORD,
+            bg=self.cor_branco,
+            fg=self.cor_texto,
+            insertbackground=self.cor_vivo_roxo,
+            selectbackground=self.cor_vivo_roxo_claro,
+            padx=10,
+            pady=10
+        )
+        self.texto_input.pack(pady=5)
+        
+        # Frame de botões
+        btn_frame = tk.Frame(frame, bg=self.cor_branco)
+        btn_frame.pack(pady=10)
+        
+        # Botão Enviar
+        tk.Button(
+            btn_frame, 
+            text="Enviar para Planilha", 
+            command=self.processar_texto,
+            bg=self.cor_vivo_roxo,
+            fg=self.cor_branco,
+            font=self.fonte,
+            padx=20,
+            pady=5,
+            activebackground=self.cor_vivo_roxo_claro,
+            activeforeground=self.cor_branco,
+            bd=0,
+            highlightthickness=0
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Botão Limpar
+        tk.Button(
+            btn_frame, 
+            text="Limpar", 
+            command=self.limpar_campos,
+            bg=self.cor_branco,
+            fg=self.cor_vivo_roxo,
+            font=self.fonte,
+            padx=20,
+            pady=5,
+            activebackground=self.cor_fundo,
+            activeforeground=self.cor_vivo_roxo,
+            bd=1,
+            highlightthickness=0
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Botão Selecionar Arquivo
+        tk.Button(
+            btn_frame, 
+            text="Abrir Arquivo", 
+            command=self.abrir_arquivo,
+            bg=self.cor_vivo_roxo_claro,
+            fg=self.cor_branco,
+            font=self.fonte,
+            padx=20,
+            pady=5,
+            activebackground=self.cor_vivo_roxo,
+            activeforeground=self.cor_branco,
+            bd=0,
+            highlightthickness=0
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Status bar
+        self.status_var = tk.StringVar()
+        self.status_var.set("Pronto para extrair dados")
+        tk.Label(
+            frame, 
+            textvariable=self.status_var,
+            bg=self.cor_branco,
+            fg=self.cor_vivo_roxo,
+            font=("Arial", 9)
+        ).pack(pady=(10, 0))
     
-    # Se não encontrar, procura o primeiro telefone válido (mas ignora LINHA:)
-    telefones = re.findall(r"(?<!LINHA[:\s])(\(?\d{2}\)?[\s-]?\d[\s-]?\d{4}[\s-]?\d{4})", texto)
-    if telefones:
-        return formatar_telefone(telefones[0])
+    def processar_texto(self):
+        texto = self.texto_input.get("1.0", tk.END).strip()
+        if not texto:
+            messagebox.showwarning("Aviso", "Por favor, cole algum texto para extrair os dados.")
+            return
+        
+        try:
+            dados = self.extrair_dados(texto)
+            self.salvar_planilha(dados)
+            self.status_var.set("Dados salvos com sucesso em dados_extraidos.xlsx")
+            messagebox.showinfo("Sucesso", "Dados extraídos e salvos na planilha!")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Ocorreu um erro:\n{str(e)}")
+            self.status_var.set("Erro ao processar dados")
     
-    return "NÃO INFORMADO"
-
-def formatar_telefone(telefone):
-    """Formata o telefone para (XX) X XXXX-XXXX"""
-    numeros = re.sub(r'[^\d]', '', telefone)
-    if len(numeros) == 11:
-        return f"({numeros[:2]}) {numeros[2]} {numeros[3:7]}-{numeros[7:]}"
-    elif len(numeros) == 10:
-        return f"({numeros[:2]}) {numeros[2:6]}-{numeros[6:]}"
-    return telefone.strip()
-
-def processar_dados(texto):
-    """Processa o texto e retorna apenas os dados necessários"""
-    dados = {
-        "Quantos cartão": "1",  # Valor padrão
-        "CNPJ": re.search(r"CNPJ[:\s]*([\d./-]+)", texto).group(1) if re.search(r"CNPJ", texto) else "NÃO INFORMADO",
-        "Nome Social": re.search(r"(RAZÃO SOCIAL|CEDENTE|GESTOR MASTER)[:\s]*([^\n]+)", texto, re.IGNORECASE).group(2).strip() if re.search(r"(RAZÃO SOCIAL|CEDENTE|GESTOR MASTER)", texto, re.IGNORECASE) else "NÃO INFORMADO",
-        "Endereço": re.search(r"RUA[:\s]*([^\n;]+)", texto).group(1).strip() if re.search(r"RUA", texto) else "NÃO INFORMADO",
-        "Numero": re.search(r"NÚMERO[:\s]*([^\n;]+)", texto).group(1).strip() if re.search(r"NÚMERO", texto) else "NÃO INFORMADO",
-        "Complemento": re.search(r"PONTO DE REF[:\s]*([^\n;]+)", texto).group(1).strip() if re.search(r"PONTO DE REF", texto) else "SEM PONTO",
-        "Cidade": re.search(r"CIDADE[:\s]*([^\n-]+)", texto).group(1).strip() if re.search(r"CIDADE", texto) else "NÃO INFORMADO",
-        "UF": re.search(r"ESTADO[:\s]*([A-Z]{2})", texto).group(1) if re.search(r"ESTADO", texto) else "NÃO INFORMADO",
-        "Telefone": extrair_telefone_principal(texto),
-        "Email": re.search(r"E-?MAIL[:\s]*([^\s]+@[^\s]+)", texto, re.IGNORECASE).group(1) if re.search(r"E-?MAIL", texto, re.IGNORECASE) else "NÃO INFORMADO",
-        "Vendedor": re.search(r"(GESTOR MASTER|VENDEDOR)[:\s]*([^\n]+)", texto, re.IGNORECASE).group(2).strip() if re.search(r"(GESTOR MASTER|VENDEDOR)", texto, re.IGNORECASE) else "NÃO INFORMADO"
-    }
+    def limpar_campos(self):
+        self.texto_input.delete("1.0", tk.END)
+        self.status_var.set("Pronto para extrair dados")
     
-    # Correção para complemento vazio
-    if dados["Complemento"] == "":
-        dados["Complemento"] = "SEM PONTO"
+    def abrir_arquivo(self):
+        filepath = filedialog.askopenfilename(
+            filetypes=[("Arquivos de Texto", "*.txt"), ("Todos os arquivos", "*.*")]
+        )
+        if filepath:
+            try:
+                with open(filepath, 'r', encoding='utf-8') as file:
+                    conteudo = file.read()
+                    self.texto_input.delete("1.0", tk.END)
+                    self.texto_input.insert("1.0", conteudo)
+                self.status_var.set(f"Arquivo carregado: {os.path.basename(filepath)}")
+            except Exception as e:
+                messagebox.showerror("Erro", f"Não foi possível abrir o arquivo:\n{str(e)}")
     
-    return dados
-
-def salvar_planilha(dados, arquivo="dados_extraidos.xlsx"):
-    """Salva os dados na planilha mantendo a ordem das colunas"""
-    colunas = [
-        "Quantos cartão", "CNPJ", "Nome Social", "Endereço", "Numero",
-        "Complemento", "Cidade", "UF", "Telefone", "Email", "Vendedor"
-    ]
+    def extrair_dados(self, texto):
+        """Extrai os dados do texto usando regex"""
+        dados = {
+            "Quantos cartão": "1",
+            "CNPJ": re.search(r"CNPJ[:\s]*([\d./-]+)", texto).group(1) if re.search(r"CNPJ", texto) else "NÃO INFORMADO",
+            "Nome Social": re.search(r"(RAZÃO SOCIAL|CEDENTE|GESTOR MASTER)[:\s]*([^\n]+)", texto, re.IGNORECASE).group(2).strip() if re.search(r"(RAZÃO SOCIAL|CEDENTE|GESTOR MASTER)", texto, re.IGNORECASE) else "NÃO INFORMADO",
+            "Endereço": re.search(r"RUA[:\s]*([^\n;]+)", texto).group(1).strip() if re.search(r"RUA", texto) else "NÃO INFORMADO",
+            "Numero": re.search(r"NÚMERO[:\s]*([^\n;]+)", texto).group(1).strip() if re.search(r"NÚMERO", texto) else "NÃO INFORMADO",
+            "Complemento": re.search(r"PONTO DE REF[:\s]*([^\n;]+)", texto).group(1).strip() if re.search(r"PONTO DE REF", texto) else "SEM PONTO",
+            "Cidade": re.search(r"CIDADE[:\s]*([^\n-]+)", texto).group(1).strip() if re.search(r"CIDADE", texto) else "NÃO INFORMADO",
+            "UF": re.search(r"ESTADO[:\s]*([A-Z]{2})", texto).group(1) if re.search(r"ESTADO", texto) else "NÃO INFORMADO",
+            "Telefone": self.extrair_telefone_principal(texto),
+            "Email": re.search(r"E-?MAIL[:\s]*([^\s]+@[^\s]+)", texto, re.IGNORECASE).group(1) if re.search(r"E-?MAIL", texto, re.IGNORECASE) else "NÃO INFORMADO",
+            "Vendedor": re.search(r"(GESTOR MASTER|VENDEDOR)[:\s]*([^\n]+)", texto, re.IGNORECASE).group(2).strip() if re.search(r"(GESTOR MASTER|VENDEDOR)", texto, re.IGNORECASE) else "NÃO INFORMADO",
+            "Data Extração": datetime.now().strftime("%d/%m/%Y %H:%M")
+        }
+        
+        if dados["Complemento"] == "":
+            dados["Complemento"] = "SEM PONTO"
+            
+        return dados
     
-    try:
-        df = pd.DataFrame([dados])[colunas]
+    def extrair_telefone_principal(self, texto):
+        """Extrai apenas o primeiro telefone de CONTATO, ignorando LINHAS de plano"""
+        contato = re.search(r"CONTATO[:\s]*([\(\)\d\s\-+]+)", texto, re.IGNORECASE)
+        if contato:
+            return self.formatar_telefone(contato.group(1))
+        
+        telefones = re.findall(r"(?<!LINHA[:\s])(\(?\d{2}\)?[\s-]?\d[\s-]?\d{4}[\s-]?\d{4})", texto)
+        if telefones:
+            return self.formatar_telefone(telefones[0])
+        
+        return "NÃO INFORMADO"
+    
+    def formatar_telefone(self, telefone):
+        """Formata o telefone para (XX) X XXXX-XXXX"""
+        numeros = re.sub(r'[^\d]', '', telefone)
+        if len(numeros) == 11:
+            return f"({numeros[:2]}) {numeros[2]} {numeros[3:7]}-{numeros[7:]}"
+        elif len(numeros) == 10:
+            return f"({numeros[:2]}) {numeros[2:6]}-{numeros[6:]}"
+        return telefone.strip()
+    
+    def salvar_planilha(self, dados):
+        """Salva os dados na planilha mantendo a ordem das colunas"""
+        colunas = [
+            "Quantos cartão", "CNPJ", "Nome Social", "Endereço", "Numero",
+            "Complemento", "Cidade", "UF", "Telefone", "Email", "Vendedor", "Data Extração"
+        ]
+        
+        arquivo = "dados_extraidos.xlsx"
         
         if os.path.exists(arquivo):
             df_existente = pd.read_excel(arquivo)
@@ -82,72 +234,15 @@ def salvar_planilha(dados, arquivo="dados_extraidos.xlsx"):
             for col in colunas:
                 if col not in df_existente.columns:
                     df_existente[col] = "NÃO INFORMADO"
-            df_final = pd.concat([df_existente, df], ignore_index=True)
+            df_novo = pd.DataFrame([dados])[colunas]
+            df_final = pd.concat([df_existente, df_novo], ignore_index=True)
         else:
-            df_final = df
+            df_final = pd.DataFrame([dados])[colunas]
         
         df_final.to_excel(arquivo, index=False)
-        print("✅ Dados salvos com sucesso!")
-        
-    except Exception as e:
-        print(f"❌ Erro ao salvar planilha: {e}")
 
-# Exemplo de uso
-texto = """
-LIVIA 
-
-VENDA CANTADA 
-
-ENDEREÇO: 
-
-RUA: FLORESTA
-BAIRRO: SAO CAETANO
-NÚMERO: 331 (EDIF CRISTAL APT 203)
-CIDADE: ITABUNA
-CEP: 45.607-090
-PONTO DE REF: SEM PONTO 
-
-
-RAZÃO SOCIAL:  J S B COMERCIO E REPRESENTACAO COMERCIAL LTDA
-CNPJ: 56.868.552/0001-70
-
-SITUAÇÃO CADASTRAL: ATIVO
-IE: ISENTO 
-
-GESTOR MASTER: EDUARDO JOSE SOARES BRANDAO
-CPF: 553.130.865-53
-RG: 4971520
-E-MAL: EDUARDOJSB10@HOTMAIL.COM
-
-GESTOR DE CONTA: EDUARDO JOSE SOARES BRANDAO
-CONTATO: (73) 9 88248659
-E-MAIL: EDUARDOJSB10@HOTMAIL.COM
-
-
-CEDENTE :  EDUARDO JOSE SOARES BRANDAO
-EMAIL: EDUARDOJSB10@HOTMAIL.COM
-CPF: 553.130.865-53
-RG: 4971520
-
-CIDADE:  ITABUNA
-ESTADO: BA
-
-PORTABILIDADE PF/PJ
-
-PLANO: 1L 100GB + 1l 1GB 
-VALOR: 129,98 
-LINHA: (73) 9 81584374 (1GB) 
-VENCIMENTO: 06
-OPERADORA: TIM
-
-LINHA: (73) 9 88248659 (100GB)
-VENCIMENTO: 06
-OPERADORA: TIM
-"""
-
-dados = processar_dados(texto)
-print("📋 Dados extraídos:")
-for k, v in dados.items():
-    print(f"{k}: {v}")
-
-salvar_planilha(dados)
+# Criar e rodar a aplicação
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = ExtratorApp(root)
+    root.mainloop()

@@ -7,7 +7,7 @@ from datetime import datetime
 import google.generativeai as genai
 
 # Colocar a chave da API do Gemini:
-chaveApi = "AIzaSyD4i2mPKMmuCf5amvmmvHZnrgnwGKp6x68"
+chaveApi = "AIzaSyCOif8UqGDkjtswQfe-rIkD4ZEX0upoqXg"
 
 class ExtratorApp:
     def __init__(self, root):

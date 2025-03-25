@@ -69,3 +69,6 @@ OPERADORA: TIM"
 
 
 Nesse dados, tem o numero, complemento, cidade, UF. Mas, no codigo não aparece, lembre que a IA vai analisar o texto do input e falar so o que queremos para que vá na planinha, que são "Quantos cartão, CNPJ, Nome Social, Endereço, Numero, Complemento, Cidade, UF, Telefone, Email, Vendedor", aí quando ela analisar o texto ela vai jogar tudo bonitnho para a planinha, tudo organizado e bonito
+
+--------------------------------------
+O codigo estar perfeito, mas, eu quero usar o Gemini, aqui estar minha chave da API "AIzaSyBQVXUpkf_G72WaXeBMlqDDEZN-jLpVPiY" Quero que o codigo fique inteligente, assim, quando o usuario digitar o input com os dados que ele quer extrair saia certo na planinha, assim, caso haja uma sequencia meia "estrenha" nos dados que o usuario digitou, então ele ira saber.

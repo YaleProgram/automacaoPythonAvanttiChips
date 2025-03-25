@@ -254,18 +254,22 @@ class ExtratorApp:
     
     def extrair_dados(self, texto):
         """Extrai os dados do texto usando regex"""
+        def safe_search(pattern, text, group=1, flags=0):
+            match = re.search(pattern, text, flags) if text else None
+            return match.group(group).strip() if match else "NÃO INFORMADO"
+
         dados = {
             "Quantos cartão": "1",
-            "CNPJ": re.search(r"CNPJ[:\s]*([\d./-]+)", texto).group(1) if re.search(r"CNPJ", texto) else "NÃO INFORMADO",
-            "Nome Social": re.search(r"(RAZÃO SOCIAL|CEDENTE|GESTOR MASTER)[:\s]*([^\n]+)", texto, re.IGNORECASE).group(2).strip() if re.search(r"(RAZÃO SOCIAL|CEDENTE|GESTOR MASTER)", texto, re.IGNORECASE) else "NÃO INFORMADO",
-            "Endereço": re.search(r"RUA[:\s]*([^\n;]+)", texto).group(1).strip() if re.search(r"RUA", texto) else "NÃO INFORMADO",
-            "Numero": re.search(r"NÚMERO[:\s]*([^\n;]+)", texto).group(1).strip() if re.search(r"NÚMERO", texto) else "NÃO INFORMADO",
-            "Complemento": re.search(r"PONTO DE REF[:\s]*([^\n;]+)", texto).group(1).strip() if re.search(r"PONTO DE REF", texto) else "SEM PONTO",
-            "Cidade": re.search(r"CIDADE[:\s]*([^\n-]+)", texto).group(1).strip() if re.search(r"CIDADE", texto) else "NÃO INFORMADO",
-            "UF": re.search(r"ESTADO[:\s]*([A-Z]{2})", texto).group(1) if re.search(r"ESTADO", texto) else "NÃO INFORMADO",
+            "CNPJ": safe_search(r"CNPJ[:\s]*([\d./-]+)", texto),
+            "Nome Social": safe_search(r"(RAZÃO SOCIAL|CEDENTE|GESTOR MASTER)[:\s]*([^\n]+)", texto, group=2, flags=re.IGNORECASE),
+            "Endereço": safe_search(r"(RUA|ENDEREÇO)[:\s]*([^\n;]+)", texto, group=2),
+            "Numero": safe_search(r"NÚMERO[:\s]*([^\n;]+)", texto),
+            "Complemento": safe_search(r"PONTO DE REF[:\s]*([^\n;]+)", texto) or "SEM PONTO",
+            "Cidade": safe_search(r"CIDADE[:\s]*([^\n-]+)", texto),
+            "UF": safe_search(r"ESTADO[:\s]*([A-Z]{2})", texto),
             "Telefone": self.extrair_telefone_principal(texto),
-            "Email": re.search(r"E-?MAIL[:\s]*([^\s]+@[^\s]+)", texto, re.IGNORECASE).group(1) if re.search(r"E-?MAIL", texto, re.IGNORECASE) else "NÃO INFORMADO",
-            "Vendedor": re.search(r"(GESTOR MASTER|VENDEDOR)[:\s]*([^\n]+)", texto, re.IGNORECASE).group(2).strip() if re.search(r"(GESTOR MASTER|VENDEDOR)", texto, re.IGNORECASE) else "NÃO INFORMADO",
+            "Email": safe_search(r"E-?MAIL[:\s]*([^\s]+@[^\s]+)", texto, flags=re.IGNORECASE),
+            "Vendedor": safe_search(r"(GESTOR MASTER|VENDEDOR)[:\s]*([^\n]+)", texto, group=2, flags=re.IGNORECASE),
             "Data Extração": datetime.now().strftime("%d/%m/%Y %H:%M")
         }
         

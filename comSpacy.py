@@ -198,23 +198,54 @@ class ExtratorApp:
         
         # Depois complementa com regex para padrões específicos
         dados = {
-            "Quantos cartão": "1",
+            "Quantos cartão": "-",
             "CNPJ": self.encontrar_padrao(texto, r"CNPJ[:\s]*([\d./-]+)"),
             "Nome Social": self.extrair_entidade(entidades_por_tipo, "ORG") or 
                           self.encontrar_padrao(texto, r"(RAZÃO SOCIAL|CEDENTE|GESTOR MASTER)[:\s]*([^\n]+)", 2),
-            "Endereço": self.encontrar_padrao(texto, r"RUA[:\s]*([^\n;]+)"),
-            "Numero": self.encontrar_padrao(texto, r"NÚMERO[:\s]*([^\n;]+)"),
+            "Endereço": self.extrair_endereco(texto),
+            "Numero": self.extrair_numero(texto),
             "Complemento": self.encontrar_padrao(texto, r"PONTO DE REF[:\s]*([^\n;]+)") or "SEM PONTO",
             "Cidade": self.extrair_entidade(entidades_por_tipo, "LOC") or 
                      self.encontrar_padrao(texto, r"CIDADE[:\s]*([^\n-]+)"),
             "UF": self.encontrar_padrao(texto, r"ESTADO[:\s]*([A-Z]{2})"),
             "Telefone": self.extrair_telefone_principal(texto),
             "Email": self.encontrar_padrao(texto, r"E-?MAIL[:\s]*([^\s]+@[^\s]+)"),
-            "Vendedor": self.encontrar_padrao(texto, r"(GESTOR MASTER|VENDEDOR)[:\s]*([^\n]+)", 2),
+            "Vendedor": "-",
             "Data Extração": datetime.now().strftime("%d/%m/%Y %H:%M")
         }
         
         return dados
+    
+    def extrair_endereco(self, texto):
+        """Extrai endereço considerando diferentes formatos (R, R., R/, R: etc.)"""
+        padrao = r"(?:RUA|R\.|R/|R:|R)[\s:]*([^\n;,]+)"
+        match = re.search(padrao, texto, re.IGNORECASE)
+        if match:
+            endereco = match.group(1).strip()
+            # Remove possíveis números que pertencem ao endereço (deixando apenas o nome da rua)
+            endereco = re.sub(r'\d+.*$', '', endereco).strip()
+            return endereco
+        return "NÃO INFORMADO"
+    
+    def extrair_numero(self, texto):
+        """Extrai número da casa considerando diferentes formatos (NUMERO, N, Nº etc.)"""
+        # Primeiro tenta encontrar padrões explícitos como "Nº", "N:", etc.
+        padrao_explicito = r"(?:NUMERO|NÚMERO|N\.|Nº|N:|N)[\s:]*([^\n;,]+)"
+        match = re.search(padrao_explicito, texto, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+        
+        # Se não encontrar, procura números no final do endereço
+        padrao_endereco = r"(?:RUA|R\.|R/|R:|R)[\s:]*([^\n;,]+)"
+        match_endereco = re.search(padrao_endereco, texto, re.IGNORECASE)
+        if match_endereco:
+            endereco_completo = match_endereco.group(1)
+            # Procura o último número no endereço
+            numeros = re.findall(r'\d+', endereco_completo)
+            if numeros:
+                return numeros[-1]
+        
+        return "NÃO INFORMADO"
     
     def extrair_entidade(self, entidades_por_tipo, tipo_entidade):
         """Extrai a primeira entidade do tipo especificado"""
@@ -248,17 +279,17 @@ class ExtratorApp:
     def extrair_dados(self, texto):
         """Extrai os dados do texto usando regex"""
         dados = {
-            "Quantos cartão": "1",
+            "Quantos cartão": "-",
             "CNPJ": re.search(r"CNPJ[:\s]*([\d./-]+)", texto).group(1) if re.search(r"CNPJ", texto) else "NÃO INFORMADO",
             "Nome Social": re.search(r"(RAZÃO SOCIAL|CEDENTE|GESTOR MASTER)[:\s]*([^\n]+)", texto, re.IGNORECASE).group(2).strip() if re.search(r"(RAZÃO SOCIAL|CEDENTE|GESTOR MASTER)", texto, re.IGNORECASE) else "NÃO INFORMADO",
-            "Endereço": re.search(r"RUA[:\s]*([^\n;]+)", texto).group(1).strip() if re.search(r"RUA", texto) else "NÃO INFORMADO",
-            "Numero": re.search(r"NÚMERO[:\s]*([^\n;]+)", texto).group(1).strip() if re.search(r"NÚMERO", texto) else "NÃO INFORMADO",
+            "Endereço": self.extrair_endereco(texto),
+            "Numero": self.extrair_numero(texto),
             "Complemento": re.search(r"PONTO DE REF[:\s]*([^\n;]+)", texto).group(1).strip() if re.search(r"PONTO DE REF", texto) else "SEM PONTO",
             "Cidade": re.search(r"CIDADE[:\s]*([^\n-]+)", texto).group(1).strip() if re.search(r"CIDADE", texto) else "NÃO INFORMADO",
             "UF": re.search(r"ESTADO[:\s]*([A-Z]{2})", texto).group(1) if re.search(r"ESTADO", texto) else "NÃO INFORMADO",
             "Telefone": self.extrair_telefone_principal(texto),
             "Email": re.search(r"E-?MAIL[:\s]*([^\s]+@[^\s]+)", texto, re.IGNORECASE).group(1) if re.search(r"E-?MAIL", texto, re.IGNORECASE) else "NÃO INFORMADO",
-            "Vendedor": re.search(r"(GESTOR MASTER|VENDEDOR)[:\s]*([^\n]+)", texto, re.IGNORECASE).group(2).strip() if re.search(r"(GESTOR MASTER|VENDEDOR)", texto, re.IGNORECASE) else "NÃO INFORMADO",
+            "Vendedor": "-",
             "Data Extração": datetime.now().strftime("%d/%m/%Y %H:%M")
         }
         

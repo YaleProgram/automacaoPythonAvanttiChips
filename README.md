@@ -14,14 +14,14 @@ Este script Python automatiza a extração de informações específicas de text
 | Campo | Exemplo | Observação |
 |-------|---------|------------|
 | Quantos cartão | 1 | Valor padrão "1" |
-| CNPJ | 56.868.552/0001-70 | Formatado corretamente |
-| Nome Social | J S B COMERCIO LTDA | - |
-| Endereço | RUA FLORESTA | Sem número |
-| Numero | 331 | Extraído do endereço |
-| Complemento | EDIF CRISTAL APT 203 | Ou "SEM PONTO" |
+| CNPJ | xx.xxx.xxxx-xxx | Formatado corretamente |
+| Nome Social | COMERCIO LTDA | - |
+| Endereço | FLORESTA | Sem número |
+| Numero | 31 | Extraído do endereço |
+| Complemento | EDIF CRISTAL APT 2 | Ou "SEM PONTO" |
 | Cidade | ITABUNA | - |
 | UF | BA | Sigla com 2 letras |
-| Telefone | (73) 9 8824-8659 | Primeiro CONTATO encontrado |
+| Telefone | (99) 9 9999-9999 | Primeiro CONTATO encontrado |
 | Email | email@exemplo.com | - |
 | Vendedor | EDUARDO BRANDAO | - |
 

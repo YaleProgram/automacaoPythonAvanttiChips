@@ -72,3 +72,12 @@ Nesse dados, tem o numero, complemento, cidade, UF. Mas, no codigo não aparece,
 
 --------------------------------------
 O codigo estar perfeito, mas, eu quero usar o Gemini, aqui estar minha chave da API "AIzaSyBQVXUpkf_G72WaXeBMlqDDEZN-jLpVPiY" Quero que o codigo fique inteligente, assim, quando o usuario digitar o input com os dados que ele quer extrair saia certo na planinha, assim, caso haja uma sequencia meia "estrenha" nos dados que o usuario digitou, então ele ira saber.
+
+------------------------------------------
+
+Me diga tudo que pode representar um endereço, tipo, "Rua:", "Rua", "R." e entre outros que geralmente o pessoal escreve
+
+
+Endereço tem que ser as ruas, e nos texto, pode ser: "Rua R. R/ R: Rua R"
+Numero <- Se refere ao numero da casa, pode estar no endereço, pode ser tbm NUMERO, ou N, e entre outros derivados, quero que você coloque no codigo para ele ficar mais inteligente.
+Sobre a coluna "Vendedor", quero que seja sempre "-" e a coluna "Quantos cartão" seja igualmente "-"

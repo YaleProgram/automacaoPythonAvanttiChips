@@ -40,6 +40,30 @@ def analisar_com_gemini(texto, prompt):
         print(f"Erro ao consultar Gemini: {e}")
         return None
 
+def normalizar_telefone(telefone):
+    """Normaliza números de telefone para formato (XX) XXXX-XXXX"""
+    if not telefone:
+        return "NÃO INFORMADO"
+    
+    # Remove tudo que não é dígito
+    numeros = re.sub(r'[^\d]', '', telefone)
+    
+    # Remove código do país se existir (55)
+    if numeros.startswith('55'):
+        numeros = numeros[2:]
+    
+    # Formata o número
+    if len(numeros) == 11:  # Com DDD e 9º dígito
+        return f"({numeros[:2]}) {numeros[2:7]}-{numeros[7:]}"
+    elif len(numeros) == 10:  # Com DDD sem 9º dígito
+        return f"({numeros[:2]}) {numeros[2:6]}-{numeros[6:]}"
+    elif len(numeros) == 9:  # Sem DDD com 9º dígito
+        return f"(XX) {numeros[:5]}-{numeros[5:]}"
+    elif len(numeros) == 8:  # Sem DDD e sem 9º dígito
+        return f"(XX) {numeros[:4]}-{numeros[4:]}"
+    else:
+        return telefone  # Retorna original se não conseguir formatar
+
 def normalizar_dados(dados):
     """Normaliza os dados extraídos para formato consistente"""
     # Normalização de CNPJ
@@ -50,10 +74,20 @@ def normalizar_dados(dados):
     
     # Normalização de telefone
     if 'Telefone' in dados:
-        telefones = re.findall(r'\d{10,11}', re.sub(r'[^\d]', '', dados['Telefone']))
+        telefones = re.findall(r'[\d\(\)\s\-+]+', dados['Telefone'])
         if telefones:
-            dados['Telefone'] = ', '.join([f'({tel[:2]}) {tel[2:7]}-{tel[7:]}' if len(tel) == 11 
-                                      else f'({tel[:2]}) {tel[2:6]}-{tel[6:]}' for tel in telefones])
+            telefones_formatados = [normalizar_telefone(tel) for tel in telefones]
+            dados['Telefone'] = ', '.join(telefones_formatados)
+    
+    # Separa número do endereço
+    if 'Endereço' in dados:
+        endereco = dados['Endereço']
+        # Procura por padrões como "N° 123" ou ", 123"
+        numero_match = re.search(r'(N°|n°|Nº|nº|,|;|)\s*(\d+)\b', endereco)
+        if numero_match and 'Numero' not in dados:
+            dados['Numero'] = numero_match.group(2)
+            # Remove o número do endereço
+            dados['Endereço'] = re.sub(r'(N°|n°|Nº|nº|,|;|)\s*\d+\b', '', endereco).strip()
     
     # Garantir que todos os campos necessários existam
     campos_necessarios = {
@@ -63,6 +97,8 @@ def normalizar_dados(dados):
         "Endereço": "NÃO INFORMADO",
         "Numero": "NÃO INFORMADO",
         "Complemento": "NÃO INFORMADO",
+        "Cidade": "NÃO INFORMADO",
+        "UF": "NÃO INFORMADO",
         "Telefone": "NÃO INFORMADO",
         "Email": "NÃO INFORMADO",
         "Vendedor": "NÃO INFORMADO"
@@ -83,11 +119,13 @@ def extrair_dados_gemini(texto):
     2. CNPJ: No formato XX.XXX.XXX/XXXX-XX
     3. Nome Social: Razão social ou nome completo
     4. Endereço: Nome da rua/avenida (sem número)
-    5. Numero: Número do endereço
-    6. Complemento: Informações adicionais do endereço
-    7. Telefone: No formato (XX) XXXX-XXXX
-    8. Email: Endereço de e-mail
-    9. Vendedor: Nome do vendedor (se mencionado)
+    5. Numero: Número do endereço (extrair do endereço se necessário)
+    6. Complemento: Ponto de referência ou informações adicionais
+    7. Cidade: Nome da cidade
+    8. UF: Sigla do estado (2 letras)
+    9. Telefone: Qualquer formato de número de telefone (será normalizado)
+    10. Email: Endereço de e-mail
+    11. Vendedor: Nome do vendedor (se mencionado)
 
     RETORNE APENAS UM OBJETO JSON COM ESSES CAMPOS. USE "NÃO INFORMADO" PARA DADOS AUSENTES.
     """
@@ -110,11 +148,25 @@ def extrair_dados_tradicional(texto):
     """Método tradicional de extração por regex"""
     cnpj = re.search(r"CNPJ[:\s]*([\d./-]+)", texto, re.IGNORECASE)
     nome_social = re.search(r"(RAZ[ÃA]O SOCIAL|NOME SOCIAL|CEDENTE|GESTOR)[:\s]+([^\n]+)", texto, re.IGNORECASE)
-    endereco = re.search(r"(RUA|AVENIDA|RODOVIA|ENDEREÇO)[\s:]*([^0-9\n;]+)", texto, re.IGNORECASE)
-    numero = re.search(r"(N°|NUMERO|NUM|Nº)[\s:]*([^\n;,]+)", texto, re.IGNORECASE)
-    complemento = re.search(r"(COMPLEMENTO|APT|APTO|SALA|LOJA|TERREO)[\s:]*([^\n;]+)", texto, re.IGNORECASE)
-    telefone = re.findall(r"(?:TELEFONE|CELULAR|CONTATO)[:\s]*([\(\)\d\s-]+)", texto, re.IGNORECASE) or \
-              re.findall(r"\(?\d{2}\)?\s?\d{4,5}-?\d{4}", texto)
+    
+    # Extrai endereço completo primeiro
+    endereco_completo = re.search(r"(RUA|AVENIDA|RODOVIA|ENDEREÇO|LOGRADOURO)[\s:]*([^\n;]+)", texto, re.IGNORECASE)
+    
+    # Separa número do endereço
+    endereco = numero = None
+    if endereco_completo:
+        endereco_texto = endereco_completo.group(2).strip()
+        numero_match = re.search(r'(N°|n°|Nº|nº|,|;|)\s*(\d+)', endereco_texto)
+        if numero_match:
+            numero = numero_match.group(2)
+            endereco = re.sub(r'(N°|n°|Nº|nº|,|;|)\s*\d+', '', endereco_texto).strip()
+        else:
+            endereco = endereco_texto
+    
+    complemento = re.search(r"(PONTO DE REFER[ÊE]NCIA|COMPLEMENTO|APT|APTO|SALA|LOJA|TERREO)[\s:]*([^\n;]+)", texto, re.IGNORECASE)
+    cidade_uf = re.search(r"CIDADE[:\s]*([^-\n]+?)\s*-\s*([A-Z]{2})", texto, re.IGNORECASE)
+    telefone = re.findall(r"(?:TELEFONE|CELULAR|CONTATO|WHATSAPP)[:\s]*([\(\)\d\s\-+]+)", texto, re.IGNORECASE) or \
+              re.findall(r"[\d\(\)\s\-+]{10,}", texto)
     email = re.search(r"E-?MAIL[:\s]*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})", texto, re.IGNORECASE)
     vendedor = re.search(r"VENDEDOR[:\s]*([^\n]+)", texto, re.IGNORECASE)
     cartoes = re.search(r"(CART[ÃA]O|CARTÃO)[\s:]*(\d+)", texto, re.IGNORECASE)
@@ -123,9 +175,11 @@ def extrair_dados_tradicional(texto):
         "Quantos cartão": cartoes.group(2) if cartoes else "NÃO INFORMADO",
         "CNPJ": cnpj.group(1) if cnpj else "NÃO INFORMADO",
         "Nome Social": nome_social.group(2).strip() if nome_social else "NÃO INFORMADO",
-        "Endereço": endereco.group(2).strip() if endereco else "NÃO INFORMADO",
-        "Numero": numero.group(2).strip() if numero else "NÃO INFORMADO",
+        "Endereço": endereco if endereco else "NÃO INFORMADO",
+        "Numero": numero if numero else "NÃO INFORMADO",
         "Complemento": complemento.group(2).strip() if complemento else "NÃO INFORMADO",
+        "Cidade": cidade_uf.group(1).strip() if cidade_uf else "NÃO INFORMADO",
+        "UF": cidade_uf.group(2) if cidade_uf else "NÃO INFORMADO",
         "Telefone": ", ".join([tel.strip() for tel in telefone]) if telefone else "NÃO INFORMADO",
         "Email": email.group(1) if email else "NÃO INFORMADO",
         "Vendedor": vendedor.group(1).strip() if vendedor else "NÃO INFORMADO"
@@ -144,6 +198,8 @@ def salvar_excel(dados, arquivo="dados_extraidos.xlsx"):
             "Endereço",
             "Numero",
             "Complemento",
+            "Cidade",
+            "UF",
             "Telefone",
             "Email",
             "Vendedor"
@@ -173,44 +229,7 @@ def salvar_excel(dados, arquivo="dados_extraidos.xlsx"):
 
 if __name__ == "__main__":
     texto_exemplo = """
-    CORREÇÃO NUMERO DO ENDEREÇO 
-
-Rua: CAM CINCO (URBIS II) NUMERO 3
-BAIRRO : BATEIAS
-TELEFONE DO DESTINATARIO: 
-CIDADE: VITORIA DA CONQUISTA 
-CEP: 45.052-062
-PONTO DE REFERÊNCIA: Próximo à escola municipalizada Maria Rogaciana
-
-RAZÃO SOCIAL: 49.605.811 FABIO HENRIQUE PIMENTEL CESAR
-CNPJ:49.605.811/0001-05
-
-SITUAÇÃO CADASTRAL:  ATIVO
-IE: 203917684
-
-GESTOR MASTER: FABIO HENRIQUE PIMENTEL CESAR
-CPF: 009.893.485-63
-RG: 0747837007 SSP BA
-E-MAIL: fabus.caezar@gmail.com
-
-GESTOR DE CONTA: FABIO HENRIQUE PIMENTEL CESAR
-CONTATO: 77991914170
-E-MAIL: fabus.caezar@gmail.com
-
-CEDENTE : FABIO HENRIQUE PIMENTEL CESAR
-EMAIL: fabus.caezar@gmail.com
-CPF: 009.893.485-63
-RG: 0747837007
-
-CIDADE: VITORIA DA CONQUISTA
-ESTADO: BA
-
-PORTABILIDADE PF - PJ 
-
-PLANO:  6 GB + 10 GB campanha DD RS$ 39,99
-LINHA: 77991914170
-VENCIMENTO: 10
-OPERADORA ATUAL: TIM
+    
     """
     
     dados_extraidos = extrair_dados_gemini(texto_exemplo)

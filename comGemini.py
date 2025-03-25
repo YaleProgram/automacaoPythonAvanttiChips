@@ -4,6 +4,10 @@ import re
 import pandas as pd
 import os
 from datetime import datetime
+import google.generativeai as genai
+
+# Colocar a chave da API do Gemini:
+chaveApi = "AIzaSyD4i2mPKMmuCf5amvmmvHZnrgnwGKp6x68"
 
 class ExtratorApp:
     def __init__(self, root):
@@ -24,9 +28,42 @@ class ExtratorApp:
         self.fonte = ("Arial", 10)
         self.fonte_titulo = ("Arial", 14, "bold")
         
+        # Configurar Gemini
+        self.configurar_gemini()
+        
         # Criar widgets
         self.criar_widgets()
         
+    def configurar_gemini(self):
+        """Configura a API do Gemini"""
+        try:
+            # Substitua pela sua API key (idealmente use variável de ambiente)
+            genai.configure(api_key=chaveApi)
+            self.gemini_model = genai.GenerativeModel('gemini-pro')
+            self.gemini_prompt = """Analise o texto e extraia as informações no formato especificado. 
+            Retorne APENAS um dicionário Python válido com as chaves exatamente como especificado.
+            Se alguma informação não for encontrada, use "NÃO INFORMADO".
+            
+            Formato do dicionário:
+            {
+                "CNPJ": "valor",
+                "Nome Social": "valor",
+                "Endereço": "valor",
+                "Numero": "valor",
+                "Complemento": "valor",
+                "Cidade": "valor",
+                "UF": "valor",
+                "Telefone": "valor",
+                "Email": "valor",
+                "Vendedor": "valor"
+            }
+            
+            Texto para análise:
+            """
+        except Exception as e:
+            print(f"Erro ao configurar Gemini: {e}")
+            self.gemini_model = None
+    
     def criar_widgets(self):
         # Frame principal
         frame = tk.Frame(self.root, bg=self.cor_branco, padx=20, pady=20)
@@ -150,13 +187,52 @@ class ExtratorApp:
             return
         
         try:
-            dados = self.extrair_dados(texto)
+            # Tenta primeiro com o Gemini
+            if self.gemini_model:
+                dados = self.extrair_dados_com_gemini(texto)
+            else:
+                dados = self.extrair_dados(texto)
+                
             self.salvar_planilha(dados)
             self.status_var.set("Dados salvos com sucesso em dados_extraidos.xlsx")
             messagebox.showinfo("Sucesso", "Dados extraídos e salvos na planilha!")
         except Exception as e:
             messagebox.showerror("Erro", f"Ocorreu um erro:\n{str(e)}")
             self.status_var.set("Erro ao processar dados")
+    
+    def extrair_dados_com_gemini(self, texto):
+        """Extrai os dados usando o Gemini AI"""
+        try:
+            full_prompt = self.gemini_prompt + texto
+            response = self.gemini_model.generate_content(full_prompt)
+            
+            if response.text:
+                # Limpa a resposta removendo possíveis marcações de código
+                clean_text = response.text.replace('```python', '').replace('```', '').strip()
+                dados = eval(clean_text)
+                
+                # Adiciona campos padrão
+                dados["Quantos cartão"] = "1"
+                dados["Data Extração"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+                
+                # Garante que todos os campos existam
+                campos_necessarios = [
+                    "Quantos cartão", "CNPJ", "Nome Social", "Endereço", "Numero",
+                    "Complemento", "Cidade", "UF", "Telefone", "Email", "Vendedor", "Data Extração"
+                ]
+                
+                for campo in campos_necessarios:
+                    if campo not in dados:
+                        dados[campo] = "NÃO INFORMADO"
+                
+                return dados
+            else:
+                raise ValueError("Gemini não retornou dados válidos")
+                
+        except Exception as e:
+            print(f"Erro no Gemini: {e}")
+            # Se falhar, usa o método tradicional
+            return self.extrair_dados(texto)
     
     def limpar_campos(self):
         self.texto_input.delete("1.0", tk.END)
